@@ -49,7 +49,7 @@ void createDemoScene(EngineCore::WorldState& world_state, EngineCore::Graphics::
         ptexMesh_mngr,
         renderTask_mngr,
         transform_mngr,
-        "C:/Users/micha/Documents/GitHub/heatmapPtexVisualization/bin/Keller.ply");
+        "../bin/Keller.ply");
 
 
     // add system that compute patch distances once per simulation frame
@@ -66,6 +66,8 @@ void createDemoScene(EngineCore::WorldState& world_state, EngineCore::Graphics::
                 ptexMesh_mngr,
                 task_schedueler,
                 ptexMesh_mngr.getComponent(ptex_mesh_idx).entity);
+
+            EngineCore::Graphics::computeTextureTileUpdateLists(ptexMesh_mngr, ptexMesh_mngr.getComponent(ptex_mesh_idx).entity);
         }
         }
     );

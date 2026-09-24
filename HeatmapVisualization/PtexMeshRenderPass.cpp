@@ -79,10 +79,6 @@ namespace EngineCore
 
                         for (auto& rt : ptex_rts)
                         {
-                            //TODO update ptex tile classificationgr, rt.entity);
-                            //EngineCore::Graphics::computePatchDistances(transform_mngr, cam_mngr, ptex_mngr, rt.entity);
-                            EngineCore::Graphics::computeTextureTileUpdateLists(ptex_mngr, rt.entity);
-
                             size_t ptex_cmp_idx = ptex_mngr.getIndex(rt.entity);
                             auto const& ptex_cmp = ptex_mngr.getComponent(ptex_cmp_idx);
 
@@ -338,7 +334,7 @@ namespace EngineCore
                                         
                                         updatePtexTiles_prgm_resource.resource->setUniform("texture_lod", texture_lod + 1.0f); //TODO more accurate computation of fitting mipmap level for source textures
                                         updatePtexTiles_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
-                                        updatePtexTiles_prgm_resource.resource->setUniform("texture_slot_offset", texture_slot_offset);
+                                        updatePtexTiles_prgm_resource.resource->setUniform("texture_slot_offset", static_cast<int>(data.per_model_data[idx].availableTiles_indexOffsets[i]));
 
                                         {
                                         auto gl_err = glGetError();
