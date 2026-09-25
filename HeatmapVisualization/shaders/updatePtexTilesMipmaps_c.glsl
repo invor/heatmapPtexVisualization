@@ -47,6 +47,6 @@ void main()
 
     //write averaged values to mip level 1
     //layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_mipmap_images[ptex_index]); // NVIDIA
-    image2DArray ptex_image = image2DArray(ptex_mipmap_images[ptex_index]); // AMD
+    writeonly image2DArray ptex_image = writeonly image2DArray(ptex_mipmap_images[ptex_index]); // AMD
     imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),colour);
 }

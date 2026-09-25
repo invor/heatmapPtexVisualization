@@ -23,6 +23,7 @@
 #include "../Editor/CameraController.hpp"
 
 #include "DynamicPtexMeshSystems.hpp"
+#include "FloatTableComponent.hpp"
 
 
 void createDemoScene(EngineCore::WorldState& world_state, EngineCore::Graphics::OpenGL::ResourceManager& resource_manager)
@@ -34,15 +35,19 @@ void createDemoScene(EngineCore::WorldState& world_state, EngineCore::Graphics::
     auto& rsrc_mngr = resource_manager;
     auto& renderTask_mngr = world_state.get<EngineCore::Graphics::RenderTaskComponentManager<EngineCore::Graphics::RenderTaskTags::PtexMesh>>();
     auto& transform_mngr = world_state.get<EngineCore::Common::TransformComponentManager>();
-
+    auto& floatTable_mngr = world_state.get<EngineCore::Common::FloatTableComponentManager>();
 
     auto camera = entity_mngr.create();
     transform_mngr.addComponent(camera, Vec3(0.0, 0.0, 0.0));
     camera_mngr.addComponent(camera,0.01,1000.0,0.7);
     camera_mngr.setActiveCamera(camera);
 
-    Entity ptex_mesh_entity = createPtexMesh(
-        entity_mngr,
+    Entity ptex_mesh_entity = entity_mngr.create();
+
+    floatTable_mngr.addComponent(ptex_mesh_entity, "../data_utils/2022_02_11-14_04_46-Nelusa-Trial-gaze_points.csv");
+
+    createPtexMesh(
+        ptex_mesh_entity,
         rsrc_mngr,
         camera_mngr,
         mtl_mngr,
@@ -50,7 +55,6 @@ void createDemoScene(EngineCore::WorldState& world_state, EngineCore::Graphics::
         renderTask_mngr,
         transform_mngr,
         "../bin/Keller.ply");
-
 
     // add system that compute patch distances once per simulation frame
     world_state.add([](EngineCore::WorldState& world_state, double dt, EngineCore::Utility::TaskScheduler& task_schedueler) {

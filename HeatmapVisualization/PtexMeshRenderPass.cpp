@@ -1,6 +1,7 @@
 #include "PtexMeshRenderPass.hpp"
 
 #include "CameraComponent.hpp"
+#include "FloatTableComponent.hpp"
 #include "MaterialComponentManager.hpp"
 #include "DynamicPtexMeshComponent.hpp"
 #include "RenderTaskComponentManager.hpp"
@@ -28,6 +29,10 @@ namespace EngineCore
                         std::vector<size_t>                            update_bin_sizes;
                         std::vector<DynamicPtexMeshComponentData::TextureSlot>    availableTiles;
                         std::vector<size_t>                            availableTiles_indexOffsets;
+
+                        size_t                                         gaze_data_column_cnt;
+                        size_t                                         gaze_data_row_cnt;
+                        std::vector<float>                             gaze_data;
                     };
 
                     std::vector<ModelData> per_model_data;
@@ -61,6 +66,7 @@ namespace EngineCore
                         auto& ptex_mngr = world_state.get<DynamicPtexMeshComponentManager>();
                         auto& transform_mngr = world_state.get<EngineCore::Common::TransformComponentManager>();
                         auto const& renderTask_mngr = world_state.get<RenderTaskComponentManager<Graphics::RenderTaskTags::PtexMesh>>();
+                        auto& floatTable_mngr = world_state.get<EngineCore::Common::FloatTableComponentManager>();
 
                         // set camera matrices
                         Entity camera_entity = cam_mngr.getActiveCamera();
@@ -82,6 +88,9 @@ namespace EngineCore
                             size_t ptex_cmp_idx = ptex_mngr.getIndex(rt.entity);
                             auto const& ptex_cmp = ptex_mngr.getComponent(ptex_cmp_idx);
 
+                            size_t floatTable_cmp_idx = floatTable_mngr.getIndex(rt.entity);
+                            auto const& floatTable_cmp = floatTable_mngr.getComponent(floatTable_cmp_idx);
+
                             PtexMeshPassData::ModelData model_data;
                             model_data.transform = transform_mngr.getWorldTransformation(rt.cached_transform_idx);
                             model_data.ptex_params = *ptex_cmp.ptex_params_; //TODO this is an actual copy, should make it thread safe wrt rendering, but also expensive in update loop
@@ -90,6 +99,9 @@ namespace EngineCore
                             model_data.update_bin_sizes = ptex_cmp.update_bin_sizes_;
                             model_data.availableTiles = ptex_cmp.availableTiles_uploadBuffer_;
                             model_data.availableTiles_indexOffsets = ptex_cmp.availableTiles_indexOffsets_;
+                            model_data.gaze_data = floatTable_cmp.data;
+                            model_data.gaze_data_column_cnt = floatTable_cmp.column_cnt;
+                            model_data.gaze_data_row_cnt = floatTable_cmp.row_cnt;
                             data.per_model_data.emplace_back(std::move(model_data));
 
                             PtexMeshPassResources::ModelResources model_resources;
@@ -273,6 +285,17 @@ namespace EngineCore
                                     );
                                 }
 
+                                //TODO get gaze point data buffer
+                                auto gaze_point_data_buffer = resource_mngr.getBufferResource("gaze_point_data_buffer");
+                                
+                                if (gaze_point_data_buffer.state != READY)
+                                {
+                                    gaze_point_data_buffer = resource_mngr.createBufferObject(
+                                        "gaze_point_data_buffer",
+                                        GL_SHADER_STORAGE_BUFFER,
+                                        data.per_model_data[idx].gaze_data);
+                                }
+
                                 // check availabilty of resources and abort update if any resource is not ready
                                 bool ptex_update_ready =
                                     resources.per_model_resources[idx].bindless_image_handles.state == ResourceState::READY &&
@@ -342,6 +365,8 @@ namespace EngineCore
                                         
                                         resources.per_model_resources[idx].bindless_image_handles.resource->bind(2);
                                         resources.per_model_resources[idx].ptex_parameters.resource->bind(3);
+
+                                        gaze_point_data_buffer.resource->bind(4);
                                         
                                         updatePatches_buffer.resource->bind(6);
                                         availableTiles_buffer.resource->bind(7);
@@ -350,10 +375,15 @@ namespace EngineCore
                                         updatePtexTiles_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
                                         updatePtexTiles_prgm_resource.resource->setUniform("texture_slot_offset", texture_slot_offset);
 
+                                        updatePtexTiles_prgm_resource.resource->setUniform(
+                                            "gaze_data_column_cnt", static_cast<int>(data.per_model_data[idx].gaze_data_column_cnt));
+                                        updatePtexTiles_prgm_resource.resource->setUniform(
+                                            "gaze_data_row_cnt", static_cast<int>(data.per_model_data[idx].gaze_data_row_cnt));
+
                                         {
-                                        auto gl_err = glGetError();
-                                        if (gl_err != GL_NO_ERROR)
-                                            std::cerr << "GL error before dispatch: " << gl_err << std::endl;
+                                            auto gl_err = glGetError();
+                                            if (gl_err != GL_NO_ERROR)
+                                                std::cerr << "GL error before dispatch: " << gl_err << std::endl;
                                         }
 
                                         //GLint data;

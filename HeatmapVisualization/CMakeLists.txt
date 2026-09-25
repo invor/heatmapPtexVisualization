@@ -7,6 +7,8 @@ target_sources(HeatmapVisualization
         OpenGLEngineFrontend.cpp
         PtexMeshRenderPass.hpp
         PtexMeshRenderPass.cpp
+        FloatTableComponent.hpp
+        FloatTableComponent.cpp
 )
 set_property(TARGET HeatmapVisualization PROPERTY OUTPUT_NAME "HeatmapVisualization")
 get_target_property(executable_name HeatmapVisualization OUTPUT_NAME)
@@ -14,3 +16,8 @@ set_property(TARGET HeatmapVisualization PROPERTY VS_DEBUGGER_COMMAND "${PROJECT
 set_property(TARGET HeatmapVisualization PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/bin/")
 target_link_libraries(HeatmapVisualization PUBLIC SpaceLion)
 install(TARGETS HeatmapVisualization DESTINATION bin)
+
+target_include_directories(
+        HeatmapVisualization PUBLIC
+        "${PROJECT_SOURCE_DIR}/deps/rapidcsv/"
+)

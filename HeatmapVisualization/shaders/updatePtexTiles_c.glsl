@@ -27,6 +27,9 @@ layout(std430, binding = 2) readonly buffer ptexImagesBuffer { uvec2[] ptex_imag
 // ptex parameter buffer
 layout(std430, binding = 3) writeonly buffer ptexParametersBuffer { PtexParameters[] ptex_params; };
 
+// gaze data buffer
+layout(std430, binding = 4) readonly buffer gazeDataBuffer { float[] gaze_data; };
+
 // update patches
 layout(std430, binding = 6) readonly buffer updatePatchesBuffer { uint[] update_patches; };
 // free slots
@@ -35,6 +38,26 @@ layout(std430, binding = 7) readonly buffer textureTilesBuffer { TextureTile[] t
 uniform float texture_lod;
 uniform int update_patch_offset;
 uniform int texture_slot_offset;
+
+uniform int gaze_data_column_cnt;
+uniform int gaze_data_row_cnt;
+
+// Returns the Viridis RGBA color for an input 't' clamped between 0.0 and 1.0
+vec3 viridis(float t) {
+  vec3 viridis_stops[5] = {
+    vec3( 68/255.f,   1/255.f,  84/255.f), // Dark Purple
+    vec3( 44/255.f, 114/255.f, 142/255.f), // Blue
+    vec3( 32/255.f, 144/255.f, 140/255.f), // Teal-Green
+    vec3( 94/255.f, 201/255.f,  97/255.f), // Bright Green
+    vec3(253/255.f, 231/255.f,  37/255.f)  // Yellow
+  };
+
+  float v = clamp(t, 0.0, 1.0) * 4.0;
+  int i = int(floor(v));
+  float lambda = v-i;
+
+  return viridis_stops[i] * (1.0-lambda) + viridis_stops[ min(i+1,4) ] * (lambda);
+}
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -70,12 +93,32 @@ void main()
   uint ptex_index = texture_tiles[texture_slot_offset + gID.z].tex_index;
   uint ptex_slice = texture_tiles[texture_slot_offset + gID.z].base_slice;
   
+
+  float intensity = 0.0;
+  // compute heatmap value from gaze data
+  //for(int i=0; i<gaze_data_row_cnt;++i)
+  for(int i=0; i < min(3072,gaze_data_row_cnt);++i)
+  {
+    //gaze_data[i*gaze_data_column_cnt + 0] // index
+    float timestamp = gaze_data[i*gaze_data_column_cnt + 1]; // timestamp
+    float gp_x = -gaze_data[i*gaze_data_column_cnt + 2];
+    float gp_y = gaze_data[i*gaze_data_column_cnt + 3];
+    float gp_z = gaze_data[i*gaze_data_column_cnt + 4];
+
+    float texel_to_gaze_point = distance(texel_position,vec3(gp_x,gp_y,gp_z));
+
+    intensity += smoothstep(0.25, 0.0, texel_to_gaze_point);
+  }
+  intensity /= 200;
+
   // All texture (per tile) are kept within the same Texture2DArray
   //layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_images[ptex_index]); // NVIDIA
-  image2DArray ptex_image = image2DArray(ptex_images[ptex_index]); // AMD
+  writeonly image2DArray ptex_image = writeonly image2DArray(ptex_images[ptex_index]); // AMD
   //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(ptex_index)/20.0,float(ptex_slice)/2048.0,0.0,1.0));
   //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(texel_position,1.0));
-  imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(ptex_index)/35.0,float(ptex_slice)/2048.0,0.0,1.0));
+  //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(gl_LocalInvocationID.x),0.0,0.0,1.0));
+  //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(ptex_index)/35.0,float(ptex_slice)/2048.0,0.0,1.0));
+  imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),1.0));
   
   ptex_params[tgt_primtive_idx].texture_index = ptex_index;
   ptex_params[tgt_primtive_idx].base_slice = ptex_slice; 

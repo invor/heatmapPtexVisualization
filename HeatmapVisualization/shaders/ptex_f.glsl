@@ -42,8 +42,8 @@ void main()
 {
   PtexParameters params = ptex_params[gl_PrimitiveID];
   
-  vec4 colour = texelFetch(sampler2DArray(ptex_textures[params.texture_index]),ivec3(ivec2(uv),int(params.base_slice)),0);
-  //vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(uv,float(params.base_slice)));
+  //vec4 colour = texelFetch(sampler2DArray(ptex_textures[params.texture_index]),ivec3(ivec2(uv),int(params.base_slice)),0);
+  vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(uv,float(params.base_slice)));
   //vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(0.5,0.5,0.5));
 
   //vec4 colour = vec4(
@@ -57,20 +57,20 @@ void main()
   float axis_x_sdf = sdBox(uv - vec2(0.3,0.1), vec2(0.155,0.035));
   float axis_y_sdf = sdBox(uv - vec2(0.1,0.3), vec2(0.035,0.155));
 
-  if(border_sdf > 0.0 || axis_x_sdf < 0.0 || axis_y_sdf < 0.0)
-  {
-    colour = vec4(0.75,0.75,0.75,1.0);
-  }
+  //if(border_sdf > 0.0 || axis_x_sdf < 0.0 || axis_y_sdf < 0.0)
+  //{
+  //  colour = vec4(0.75,0.75,0.75,1.0);
+  //}
 
-  if(axis_x_sdf < -0.005)
-  {
-    colour = vec4(1.0,0.1,0.1,1.0);
-  }
+  //if(axis_x_sdf < -0.005)
+  //{
+  //  colour = vec4(1.0,0.1,0.1,1.0);
+  //}
 
-  if(axis_y_sdf < -0.005)
-  {
-    colour = vec4(0.1,1.0,0.1,1.0);
-  }
+  //if(axis_y_sdf < -0.005)
+  //{
+  //  colour = vec4(0.1,1.0,0.1,1.0);
+  //}
 
   float pseudo_lightning = clamp(dot(patch_normal,normalize(vec3(-1.0,1.0,-1.0))),0.0,1.0) * 0.5 + 0.5;
 

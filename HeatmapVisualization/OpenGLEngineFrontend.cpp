@@ -7,6 +7,7 @@
 
 #include "AnimationSystems.hpp"
 #include "CameraComponent.hpp"
+#include "FloatTableComponent.hpp"
 #include "GeometryBakery.hpp"
 #include "gltfAssetComponentManager.hpp"
 #include "MeshComponentManager.hpp"
@@ -32,6 +33,7 @@
             m_world_state(std::make_unique<EngineCore::WorldState>())
         {
             m_world_state->add<EngineCore::Graphics::CameraComponentManager>(std::make_unique<EngineCore::Graphics::CameraComponentManager>());
+            m_world_state->add<EngineCore::Common::FloatTableComponentManager>(std::make_unique<EngineCore::Common::FloatTableComponentManager>());
             m_world_state->add<EngineCore::Graphics::GltfAssetComponentManager>(std::make_unique<EngineCore::Graphics::GltfAssetComponentManager>());
             m_world_state->add<EngineCore::Graphics::MaterialComponentManager>(std::make_unique<EngineCore::Graphics::MaterialComponentManager>());
             m_world_state->add<EngineCore::Graphics::MeshComponentManager<EngineCore::Graphics::OpenGL::ResourceManager>>(std::make_unique<EngineCore::Graphics::MeshComponentManager<EngineCore::Graphics::OpenGL::ResourceManager>>(m_resource_manager.get()));
