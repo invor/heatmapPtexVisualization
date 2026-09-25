@@ -42,8 +42,9 @@ void main()
 {
   PtexParameters params = ptex_params[gl_PrimitiveID];
   
+  vec4 colour = texelFetch(sampler2DArray(ptex_textures[params.texture_index]),ivec3(ivec2(uv),int(params.base_slice)),0);
   //vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(uv,float(params.base_slice)));
-  vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(0.5,0.5,0.5));
+  //vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(0.5,0.5,0.5));
 
   //vec4 colour = vec4(
   //  float(params.ngbr_ptex_param_indices[0])/384.0,

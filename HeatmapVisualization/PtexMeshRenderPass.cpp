@@ -257,6 +257,22 @@ namespace EngineCore
                                     );
                                 }
 
+                                auto updatePtexTilesMipmaps_prgm_resource = resource_mngr.getShaderProgramResource("updatePtexTilesMipmaps_prgm");
+
+                                if (updatePtexTilesMipmaps_prgm_resource.state != READY)
+                                {
+                                    // create shader for rendering the ptex surface
+                                    std::string shader_root = "../HeatmapVisualization/shaders/";
+                                    std::vector<EngineCore::Graphics::OpenGL::ResourceManager::ShaderFilename> shader_names
+                                        = std::initializer_list<EngineCore::Graphics::OpenGL::ResourceManager::ShaderFilename>{
+                                            { shader_root + "updatePtexTilesMipmaps_c.glsl", glowl::GLSLProgram::ShaderType::Compute }
+                                    };
+                                    updatePtexTilesMipmaps_prgm_resource = resource_mngr.createShaderProgram(
+                                        "updatePtexTilesMipmaps_prgm",
+                                        shader_names
+                                    );
+                                }
+
                                 // check availabilty of resources and abort update if any resource is not ready
                                 bool ptex_update_ready =
                                     resources.per_model_resources[idx].bindless_image_handles.state == ResourceState::READY &&
@@ -301,7 +317,6 @@ namespace EngineCore
 
                                     // TODO per LOD level dispatch computes
                                     int update_patch_offset = 0;
-                                    int texture_slot_offset = 0;
                                     int tile_size_multiplier = std::pow(2, data.per_model_data[idx].lod_lvls - 1);
 
                                     for (int i = 0; i < static_cast<int>(data.per_model_data[idx].update_bin_sizes.size()) - 1; ++i)
@@ -316,8 +331,7 @@ namespace EngineCore
                                         }
 
                                         float texture_lod = static_cast<float>(i);
-
-                                        uint32_t remaining_tex_bin_size = data.per_model_data[idx].availableTiles_indexOffsets[i];
+                                        int texture_slot_offset = static_cast<int>(data.per_model_data[idx].availableTiles_indexOffsets[i]);
 
                                         // set GLSL program
                                         updatePtexTiles_prgm_resource.resource->use();
@@ -334,7 +348,7 @@ namespace EngineCore
                                         
                                         updatePtexTiles_prgm_resource.resource->setUniform("texture_lod", texture_lod + 1.0f); //TODO more accurate computation of fitting mipmap level for source textures
                                         updatePtexTiles_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
-                                        updatePtexTiles_prgm_resource.resource->setUniform("texture_slot_offset", static_cast<int>(data.per_model_data[idx].availableTiles_indexOffsets[i]));
+                                        updatePtexTiles_prgm_resource.resource->setUniform("texture_slot_offset", texture_slot_offset);
 
                                         {
                                         auto gl_err = glGetError();
@@ -359,10 +373,6 @@ namespace EngineCore
                                         glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
                                         update_patch_offset += bin_size;
-                                        //texture_slot_offset += bin_size;
-                                        //remaining_tex_bin_size -= bin_size;
-
-                                        texture_slot_offset += remaining_tex_bin_size;
 
                                         tile_size_multiplier /= 2;
                                     }
@@ -403,44 +413,35 @@ namespace EngineCore
                                     //      memcpy(m_bricks[index].m_mesh_ptex_params.data(), ptex_params, byte_size);
                                     //      glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 
+                                    {
+                                        resources.per_model_resources[idx].bindless_texture_handles.resource->bind(0);
+                                        resources.per_model_resources[idx].bindless_mipmap_image_handles.resource->bind(1);
+                                        resources.per_model_resources[idx].ptex_parameters.resource->bind(2);
+                                        updatePatches_buffer.resource->bind(3);
+                                    
+                                        int update_patch_offset = 0;
+                                        int tile_size_multiplier = std::pow(2, data.per_model_data[idx].lod_lvls - 1);
+                                    
+                                        updatePtexTilesMipmaps_prgm_resource.resource->use();
+                                    
+                                        // only update mipmaps of non-vista level tiles
+                                        for (int i = 0; i < static_cast<int>(data.per_model_data[idx].update_bin_sizes.size()) - 1; ++i)
+                                        {
+                                            uint32_t bin_size = data.per_model_data[idx].update_bin_sizes[i];
+                                            if (bin_size == 0)
+                                            {
+                                                continue;
+                                            }
+                                    
+                                            updatePtexTilesMipmaps_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
+                                    
+                                            glDispatchCompute(tile_size_multiplier, tile_size_multiplier, bin_size);
+                                    
+                                            tile_size_multiplier /= 2;
+                                            update_patch_offset += bin_size;
+                                        }
+                                    }
 
-                                    //TODO add GPU task for mipmap computation
-                                    //GEngineCore::renderingPipeline().addSingleExecutionGpuTask([this, index]()
-                                    //{
-                                    //if (m_bricks[index].m_cancel_ptex_update)
-                                    //{
-                                    //	return;
-                                    //}
-                                    //      {
-                                    //          WeakResource<ShaderStorageBufferObject> texture_handles_rsrc = GEngineCore::resourceManager().getSSBO(m_bricks[index].m_ptex_bindless_texture_handles);
-                                    //          WeakResource<ShaderStorageBufferObject> mipmap_image_handles_rsrc = GEngineCore::resourceManager().getSSBO(m_bricks[index].m_ptex_bindless_mipmap_image_handles);
-                                    //          WeakResource<ShaderStorageBufferObject> ptex_params_rsrc = GEngineCore::resourceManager().getSSBO(m_bricks[index].m_ptex_parameters);
-                                    //          WeakResource<ShaderStorageBufferObject> updatePatches_rsrc = GEngineCore::resourceManager().getSSBO(m_bricks[index].m_ptex_updatePatches_tgt_SSBO);
-                                    //      
-                                    //          texture_handles_rsrc.resource->bind(0);
-                                    //          mipmap_image_handles_rsrc.resource->bind(1);
-                                    //          ptex_params_rsrc.resource->bind(2);
-                                    //          updatePatches_rsrc.resource->bind(3);
-                                    //      
-                                    //          int update_patch_offset = 0;
-                                    //          int tile_size_multiplier = std::pow(2, m_bricks[index].m_lod_lvls - 1);
-                                    //      
-                                    //          updatePtexTilesMipmaps_prgm->use();
-                                    //      
-                                    //          // only update mipmaps of non-vista level tiles
-                                    //          for (int i = 0; i < static_cast<int>(m_bricks[index].m_ptex_update_bin_sizes.size()) - 1; ++i)
-                                    //          {
-                                    //              uint32_t bin_size = m_bricks[index].m_ptex_update_bin_sizes[i];
-                                    //      
-                                    //              updatePtexTilesMipmaps_prgm->setUniform("update_patch_offset", update_patch_offset);
-                                    //      
-                                    //              updatePtexTilesMipmaps_prgm->dispatchCompute(tile_size_multiplier, tile_size_multiplier, bin_size);
-                                    //      
-                                    //              tile_size_multiplier /= 2;
-                                    //              update_patch_offset += bin_size;
-                                    //          }
-                                    //      }
-                                    //});
                                 }
                             }
 
