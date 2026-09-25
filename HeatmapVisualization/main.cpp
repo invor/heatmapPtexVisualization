@@ -190,6 +190,8 @@ struct App {
 
                 auto window_resolution = this->getWindowResolution();
 
+                m_frame_ready_to_render.wait(true);
+
                 m_engine_frontend->update(update_frameID++, dt, std::get<0>(window_resolution), std::get<1>(window_resolution));
 
                 m_frame_ready_to_render.test_and_set();
@@ -233,6 +235,7 @@ struct App {
 
                 m_frame_ready_to_render.wait(false);
                 m_frame_ready_to_render.clear();
+                m_frame_ready_to_render.notify_all();
 
                 // Get current frame for rendering
                 auto& frame = m_engine_frontend->accessFrameManager().getRenderFrame();
