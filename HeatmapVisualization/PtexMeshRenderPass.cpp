@@ -24,11 +24,12 @@ namespace EngineCore
                         Mat4x4 transform;
 
                         std::vector<DynamicPtexMeshComponentData::PtexParameters> ptex_params;
-                        size_t                                         lod_lvls;
-                        std::vector<uint32_t>                          updatePatches_tgt;
-                        std::vector<size_t>                            update_bin_sizes;
+                        size_t                                                    lod_lvls;
+                        std::vector<size_t>                                       lod_bin_sizes;
+                        std::vector<uint32_t>                                     updatePatches_tgt;
+                        std::vector<size_t>                                       update_bin_sizes;
                         std::vector<DynamicPtexMeshComponentData::TextureSlot>    availableTiles;
-                        std::vector<size_t>                            availableTiles_indexOffsets;
+                        std::vector<size_t>                                       availableTiles_indexOffsets;
 
                         size_t                                         gaze_data_column_cnt;
                         size_t                                         gaze_data_row_cnt;
@@ -95,6 +96,7 @@ namespace EngineCore
                             model_data.transform = transform_mngr.getWorldTransformation(rt.cached_transform_idx);
                             model_data.ptex_params = *ptex_cmp.ptex_params_; //TODO this is an actual copy, should make it thread safe wrt rendering, but also expensive in update loop
                             model_data.lod_lvls = ptex_cmp.lod_lvls_;
+                            model_data.lod_bin_sizes = ptex_cmp.lod_bin_sizes_;
                             model_data.updatePatches_tgt = ptex_cmp.updatePatches_tgt_;
                             model_data.update_bin_sizes = ptex_cmp.update_bin_sizes_;
                             model_data.availableTiles = ptex_cmp.availableTiles_uploadBuffer_;
@@ -169,85 +171,94 @@ namespace EngineCore
                                         resources.per_model_resources[idx].bindless_image_handles.resource->rebuffer(image_handles);
                                         resources.per_model_resources[idx].bindless_mipmap_image_handles.resource->rebuffer(mipmap_image_handles);
 
+
+                                        {
+                                            //TODO check if vista textures need to be baked
+                                            //TODO temporarily combine with texture handle buffer init to onyl execute once
+
+                                            auto bakePtexVistaTiles_prgm_resource = resource_mngr.getShaderProgramResource("bakePtexVistaTiles_prgm");
+
+                                            if (bakePtexVistaTiles_prgm_resource.state != READY)
+                                            {
+                                                // create shader for rendering the ptex surface
+                                                std::string shader_root = "../HeatmapVisualization/shaders/";
+                                                std::vector<EngineCore::Graphics::OpenGL::ResourceManager::ShaderFilename> shader_names
+                                                    = std::initializer_list<EngineCore::Graphics::OpenGL::ResourceManager::ShaderFilename>{
+                                                        { shader_root + "bakePtexVistaTiles_c.glsl", glowl::GLSLProgram::ShaderType::Compute }
+                                                };
+                                                bakePtexVistaTiles_prgm_resource = resource_mngr.createShaderProgram(
+                                                    "bakePtexVistaTiles_prgm",
+                                                    shader_names
+                                                );
+                                            }
+
+                                            // get gaze point data buffer
+                                            auto gaze_point_data_buffer = resource_mngr.getBufferResource("gaze_point_data_buffer");
+
+                                            if (gaze_point_data_buffer.state != READY)
+                                            {
+                                                gaze_point_data_buffer = resource_mngr.createBufferObject(
+                                                    "gaze_point_data_buffer",
+                                                    GL_SHADER_STORAGE_BUFFER,
+                                                    data.per_model_data[idx].gaze_data);
+                                            }
+
+                                            // Bake surface textures
+                                            bakePtexVistaTiles_prgm_resource.resource->use();
+                                            
+                                            // Bind vertex and index buffer as storage buffer
+                                            resources.per_model_resources[idx].geometry.resource->getVbos().front()->bindAs(GL_SHADER_STORAGE_BUFFER, 0);
+                                            resources.per_model_resources[idx].geometry.resource->getIbo().bindAs(GL_SHADER_STORAGE_BUFFER, 1);
+                                            
+                                            resources.per_model_resources[idx].bindless_image_handles.resource->bind(2);
+
+                                            gaze_point_data_buffer.resource->bind(4);
+
+                                            bakePtexVistaTiles_prgm_resource.resource->setUniform(
+                                                "gaze_data_column_cnt", static_cast<int>(data.per_model_data[idx].gaze_data_column_cnt));
+                                            bakePtexVistaTiles_prgm_resource.resource->setUniform(
+                                                "gaze_data_row_cnt", static_cast<int>(data.per_model_data[idx].gaze_data_row_cnt));
+
+                                            bakePtexVistaTiles_prgm_resource.resource->setUniform("layers", 2048);
+                                            
+                                            int texture_base_idx = image_handles.size() - ((data.per_model_data[idx].lod_bin_sizes[data.per_model_data[idx].lod_lvls - 1]) / 2048);
+                                            bakePtexVistaTiles_prgm_resource.resource->setUniform("texture_base_idx", texture_base_idx);
+                                            
+                                            GLint primitive_base_idx = 0;
+                                            GLint remaining_dispatches = static_cast<GLint>(data.per_model_data[idx].ptex_params.size());
+                                            GLint max_work_groups_z = 0;
+                                            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &max_work_groups_z);
+                                            
+                                            while (remaining_dispatches > 0)
+                                            {
+                                                GLuint dispatchs_cnt = (remaining_dispatches > max_work_groups_z) ? max_work_groups_z : remaining_dispatches;
+                                            
+                                                bakePtexVistaTiles_prgm_resource.resource->setUniform("primitive_base_idx", primitive_base_idx);
+                                                glDispatchCompute(1, 1, dispatchs_cnt);
+                                            
+                                                if (remaining_dispatches > max_work_groups_z)
+                                                {
+                                                    remaining_dispatches -= max_work_groups_z;
+                                                    primitive_base_idx += max_work_groups_z;
+                                                }
+                                                else
+                                                {
+                                                    remaining_dispatches = 0;
+                                                }
+                                            }
+                                            
+                                            // Build vista tiles mipmaps
+                                            for (int i = texture_base_idx; i < resources.per_model_resources[idx].textures.size(); ++i)
+                                            {
+                                                auto ptex_texture_resource = resource_mngr.getTexture2DArray(resources.per_model_resources[idx].textures[i]);
+                                            
+                                                ptex_texture_resource.resource->bindTexture();
+                                                glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+                                            }
+                                        }
                                     }
                                 }
 
-                                {
-                                    //TODO check if vista textures need to be baked
-
-                                    // load bindless texture handles for all texture given by ptex material to make them available during texture baking
-                                    //std::vector<GLuint64> surface_texture_handles;
-                                    //WeakResource<Material> ptex_material_resource = GEngineCore::resourceManager().getMaterial(ptex_component.material);
-                                    //for (auto texture : ptex_material_resource.resource->getTextures())
-                                    //{
-                                    //	surface_texture_handles.push_back(texture->getTextureHandle());
-                                    //	texture->makeResident();
-                                    //}
-                                    //WeakResource<ShaderStorageBufferObject> ptex_material_bth_resource = GEngineCore::resourceManager().getSSBO(ptex_component.material_bth);
-                                    //ptex_material_bth_resource.resource->reload(surface_texture_handles);
-                                    //
-                                    //{
-                                    //	auto err = glGetError();
-                                    //	if (err != GL_NO_ERROR) {
-                                    //		std::cerr << "Error - bakeSurfaceTexture - 3953: " << err << std::endl;
-                                    //	}
-                                    //}
-                                    //
-                                    //// Bake surface textures
-                                    //textureBaking_prgm->use();
-                                    //
-                                    //// Bind vertex and index buffer as storage buffer
-                                    //m_bricks[index].m_surface_mesh->getVbo().bindAs(GL_SHADER_STORAGE_BUFFER, 0);
-                                    //m_bricks[index].m_surface_mesh->getIbo().bindAs(GL_SHADER_STORAGE_BUFFER, 1);
-                                    //
-                                    //ptex_bindless_images_handles_resource.resource->bind(2);
-                                    //ptex_parameters_resource.resource->bind(3);
-                                    //
-                                    //ptex_material_bth_resource.resource->bind(4);
-                                    //
-                                    //ResourceID decal_buffer = GRenderingComponents::decalManager().getGPUBufferResource();
-                                    //auto decal_buffer_rsrc = GEngineCore::resourceManager().getSSBO(decal_buffer);
-                                    //decal_buffer_rsrc.resource->bind(5);
-                                    //
-                                    //textureBaking_prgm->setUniform("decal_cnt", GRenderingComponents::decalManager().getComponentCount());
-                                    //textureBaking_prgm->setUniform("texture_lod", static_cast<float>(ptex_component.lod_lvls_));
-                                    //textureBaking_prgm->setUniform("layers", layers);
-                                    //
-                                    //int texture_base_idx = image_handles.size() - ((ptex_component.lod_bin_sizes[ptex_component.lod_lvls_ - 1] * material_components) / layers);
-                                    //textureBaking_prgm->setUniform("texture_base_idx", texture_base_idx);
-                                    //
-                                    //GLint primitive_base_idx = 0;
-                                    //GLint remaining_dispatches = primitive_cnt;
-                                    //GLint max_work_groups_z = 0;
-                                    //glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &max_work_groups_z);
-                                    //
-                                    //while (remaining_dispatches > 0)
-                                    //{
-                                    //	GLuint dispatchs_cnt = (remaining_dispatches > max_work_groups_z) ? max_work_groups_z : remaining_dispatches;
-                                    //
-                                    //	textureBaking_prgm->setUniform("primitive_base_idx", primitive_base_idx);
-                                    //	textureBaking_prgm->dispatchCompute(1, 1, dispatchs_cnt);
-                                    //
-                                    //	if (remaining_dispatches > max_work_groups_z)
-                                    //	{
-                                    //		remaining_dispatches -= max_work_groups_z;
-                                    //		primitive_base_idx += max_work_groups_z;
-                                    //	}
-                                    //	else
-                                    //	{
-                                    //		remaining_dispatches = 0;
-                                    //	}
-                                    //}
-                                    //
-                                    //// Build vista tiles mipmaps
-                                    //for (int i = texture_base_idx; i < ptex_component.textures.size(); ++i)
-                                    //{
-                                    //	auto ptex_texture_resource = GEngineCore::resourceManager().getTexture2DArray(ptex_component.textures[i]);
-                                    //
-                                    //	ptex_texture_resource.resource->bindTexture();
-                                    //	glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-                                    //}
-                                }
 
                                 // check if non-vista-level updates are queued
                                 uint update_patches = 0;
@@ -285,7 +296,23 @@ namespace EngineCore
                                     );
                                 }
 
-                                //TODO get gaze point data buffer
+                                auto setPtexVistaTiles_prgm_resource = resource_mngr.getShaderProgramResource("setPtexVistaTiles_prgm");
+
+                                if (setPtexVistaTiles_prgm_resource.state != READY)
+                                {
+                                    // create shader for rendering the ptex surface
+                                    std::string shader_root = "../HeatmapVisualization/shaders/";
+                                    std::vector<EngineCore::Graphics::OpenGL::ResourceManager::ShaderFilename> shader_names
+                                        = std::initializer_list<EngineCore::Graphics::OpenGL::ResourceManager::ShaderFilename>{
+                                            { shader_root + "setPtexVistaTiles_c.glsl", glowl::GLSLProgram::ShaderType::Compute }
+                                    };
+                                    setPtexVistaTiles_prgm_resource = resource_mngr.createShaderProgram(
+                                        "setPtexVistaTiles_prgm",
+                                        shader_names
+                                    );
+                                }
+
+                                // get gaze point data buffer
                                 auto gaze_point_data_buffer = resource_mngr.getBufferResource("gaze_point_data_buffer");
                                 
                                 if (gaze_point_data_buffer.state != READY)
@@ -320,7 +347,7 @@ namespace EngineCore
                                     {
                                         updatePatches_buffer.resource->rebuffer(data.per_model_data[idx].updatePatches_tgt);
                                     }
-                                    
+
                                     auto availableTiles_buffer = resource_mngr.getBufferResource("availableTiles_buffer");
                                     if (availableTiles_buffer.id == resource_mngr.invalidResourceID())
                                     {
@@ -348,59 +375,58 @@ namespace EngineCore
                                         //assert(m_bricks[index].m_ptex_availableTiles_bin_sizes[i] >= m_bricks[index].m_ptex_update_bin_sizes[i]);
 
                                         uint32_t bin_size = data.per_model_data[idx].update_bin_sizes[i];
-                                        if (bin_size == 0)
+                                        if (bin_size > 0)
                                         {
-                                            continue;
+                                            float texture_lod = static_cast<float>(i);
+                                            int texture_slot_offset = static_cast<int>(data.per_model_data[idx].availableTiles_indexOffsets[i]);
+
+                                            // set GLSL program
+                                            updatePtexTiles_prgm_resource.resource->use();
+
+                                            // Bind vertex and index buffer as storage buffer
+                                            resources.per_model_resources[idx].geometry.resource->getVbos().front()->bindAs(GL_SHADER_STORAGE_BUFFER, 0);
+                                            resources.per_model_resources[idx].geometry.resource->getIbo().bindAs(GL_SHADER_STORAGE_BUFFER, 1);
+
+                                            resources.per_model_resources[idx].bindless_image_handles.resource->bind(2);
+                                            resources.per_model_resources[idx].ptex_parameters.resource->bind(3);
+
+                                            gaze_point_data_buffer.resource->bind(4);
+
+                                            updatePatches_buffer.resource->bind(6);
+                                            availableTiles_buffer.resource->bind(7);
+
+                                            updatePtexTiles_prgm_resource.resource->setUniform("texture_lod", texture_lod + 1.0f); //TODO more accurate computation of fitting mipmap level for source textures
+                                            updatePtexTiles_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
+                                            updatePtexTiles_prgm_resource.resource->setUniform("texture_slot_offset", texture_slot_offset);
+
+                                            updatePtexTiles_prgm_resource.resource->setUniform(
+                                                "gaze_data_column_cnt", static_cast<int>(data.per_model_data[idx].gaze_data_column_cnt));
+                                            updatePtexTiles_prgm_resource.resource->setUniform(
+                                                "gaze_data_row_cnt", static_cast<int>(data.per_model_data[idx].gaze_data_row_cnt));
+
+                                            {
+                                                auto gl_err = glGetError();
+                                                if (gl_err != GL_NO_ERROR)
+                                                    std::cerr << "GL error before dispatch: " << gl_err << std::endl;
+                                            }
+
+                                            //GLint data;
+                                            //glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &data);
+                                            //std::cout << "GL_MAX_COMPUTE_WORK_GROUP_COUNT: " << data<<std::endl;
+
+                                            glDispatchCompute(tile_size_multiplier, tile_size_multiplier, std::min(65535u, bin_size));
+                                            //glDispatchCompute(tile_size_multiplier, tile_size_multiplier, bin_size);
+                                            //updatePtexTiles_prgm_resource.resource->dispatchCompute(tile_size_multiplier, tile_size_multiplier, bin_size);
+
+                                            {
+                                                auto gl_err = glGetError();
+                                                if (gl_err != GL_NO_ERROR)
+                                                    std::cerr << "GL error after dispatch: " << gl_err << std::endl;
+                                            }
+
+                                            glMemoryBarrier(GL_ALL_BARRIER_BITS);
+
                                         }
-
-                                        float texture_lod = static_cast<float>(i);
-                                        int texture_slot_offset = static_cast<int>(data.per_model_data[idx].availableTiles_indexOffsets[i]);
-
-                                        // set GLSL program
-                                        updatePtexTiles_prgm_resource.resource->use();
-
-                                        // Bind vertex and index buffer as storage buffer
-                                        resources.per_model_resources[idx].geometry.resource->getVbos().front()->bindAs(GL_SHADER_STORAGE_BUFFER, 0);
-                                        resources.per_model_resources[idx].geometry.resource->getIbo().bindAs(GL_SHADER_STORAGE_BUFFER, 1);
-                                        
-                                        resources.per_model_resources[idx].bindless_image_handles.resource->bind(2);
-                                        resources.per_model_resources[idx].ptex_parameters.resource->bind(3);
-
-                                        gaze_point_data_buffer.resource->bind(4);
-                                        
-                                        updatePatches_buffer.resource->bind(6);
-                                        availableTiles_buffer.resource->bind(7);
-                                        
-                                        updatePtexTiles_prgm_resource.resource->setUniform("texture_lod", texture_lod + 1.0f); //TODO more accurate computation of fitting mipmap level for source textures
-                                        updatePtexTiles_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
-                                        updatePtexTiles_prgm_resource.resource->setUniform("texture_slot_offset", texture_slot_offset);
-
-                                        updatePtexTiles_prgm_resource.resource->setUniform(
-                                            "gaze_data_column_cnt", static_cast<int>(data.per_model_data[idx].gaze_data_column_cnt));
-                                        updatePtexTiles_prgm_resource.resource->setUniform(
-                                            "gaze_data_row_cnt", static_cast<int>(data.per_model_data[idx].gaze_data_row_cnt));
-
-                                        {
-                                            auto gl_err = glGetError();
-                                            if (gl_err != GL_NO_ERROR)
-                                                std::cerr << "GL error before dispatch: " << gl_err << std::endl;
-                                        }
-
-                                        //GLint data;
-                                        //glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &data);
-                                        //std::cout << "GL_MAX_COMPUTE_WORK_GROUP_COUNT: " << data<<std::endl;
-
-                                        glDispatchCompute(tile_size_multiplier, tile_size_multiplier, std::min(65535u, bin_size));
-                                        //glDispatchCompute(tile_size_multiplier, tile_size_multiplier, bin_size);
-                                        //updatePtexTiles_prgm_resource.resource->dispatchCompute(tile_size_multiplier, tile_size_multiplier, bin_size);
-
-                                        {
-                                        auto gl_err = glGetError();
-                                        if (gl_err != GL_NO_ERROR)
-                                            std::cerr << "GL error after dispatch: " << gl_err << std::endl;
-                                        }
-
-                                        glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
                                         update_patch_offset += bin_size;
 
@@ -409,39 +435,41 @@ namespace EngineCore
 
                                     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-
-                                    //      // Assign vista tiles (no recomutation necessary)
-                                    //      if (m_bricks[index].m_ptex_update_bin_sizes.back() > 0)
-                                    //      {
-                                    //          setPtexVistaTiles_prgm->use();
-                                    //      
-                                    //          ptex_parameters_resource.resource->bind(3);
-                                    //          updatePatches_SSBO_resource.resource->bind(6);
-                                    //      
-                                    //          setPtexVistaTiles_prgm->setUniform("update_patch_offset", update_patch_offset);
-                                    //      
-                                    //          int texture_base_idx = m_bricks[index].m_ptex_textures.size() - (m_bricks[index].m_ptex_lod_bin_sizes.back() * 4) / 2048;
-                                    //          setPtexVistaTiles_prgm->setUniform("texture_base_idx", texture_base_idx);
-                                    //          setPtexVistaTiles_prgm->setUniform("vista_patch_cnt", m_bricks[index].m_ptex_update_bin_sizes.back());
-                                    //      
-                                    //          setPtexVistaTiles_prgm->dispatchCompute(1, 1, (m_bricks[index].m_ptex_update_bin_sizes.back() / 32) + 1);
-                                    //      
-                                    //          //	for (auto texture : m_bricks[index].m_ptex_textures)
-                                    //              //	{
-                                    //              //		auto tex_rsrc = GEngineCore::resourceManager().getTexture2DArray(texture);
-                                    //              //		tex_rsrc.resource->updateMipmaps();
-                                    //              //	}
-                                    //      }
-                                    //      
-                                    //      glMemoryBarrier(GL_ALL_BARRIER_BITS);
-                                    //      
-                                    //      // copy updated ptex params to cpu
-                                    //      size_t byte_size = ptex_parameters_resource.resource->getSize();
-                                    //      //m_bricks[index].m_mesh_ptex_params.resize(quad_cnt); // 1 set of ptex params per quad
-                                    //      ptex_parameters_resource.resource->bind();
-                                    //      GLvoid* ptex_params = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, byte_size, GL_MAP_READ_BIT);
-                                    //      memcpy(m_bricks[index].m_mesh_ptex_params.data(), ptex_params, byte_size);
-                                    //      glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+                                    {
+                                        // Assign vista tiles (no recomutation necessary)
+                                        if (data.per_model_data[idx].update_bin_sizes.back() > 0)
+                                        {
+                                            setPtexVistaTiles_prgm_resource.resource->use();
+                                        
+                                            resources.per_model_resources[idx].ptex_parameters.resource->bind(3);
+                                            updatePatches_buffer.resource->bind(6);
+                                        
+                                            setPtexVistaTiles_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
+                                        
+                                            int texture_base_idx = resources.per_model_resources[idx].textures.size() - (data.per_model_data[idx].lod_bin_sizes.back() / 2048);
+                                            unsigned int vista_patch_cnt = static_cast<unsigned int>(data.per_model_data[idx].update_bin_sizes.back());
+                                            setPtexVistaTiles_prgm_resource.resource->setUniform("texture_base_idx", texture_base_idx);
+                                            setPtexVistaTiles_prgm_resource.resource->setUniform("vista_patch_cnt", vista_patch_cnt);
+                                        
+                                            glDispatchCompute(1, 1, (vista_patch_cnt / 32) + 1);
+                                        
+                                            //	for (auto texture : m_bricks[index].m_ptex_textures)
+                                                //	{
+                                                //		auto tex_rsrc = GEngineCore::resourceManager().getTexture2DArray(texture);
+                                                //		tex_rsrc.resource->updateMipmaps();
+                                                //	}
+                                        }
+                                        
+                                        glMemoryBarrier(GL_ALL_BARRIER_BITS);
+                                        
+                                        //  // copy updated ptex params to cpu
+                                        //  size_t byte_size = ptex_parameters_resource.resource->getSize();
+                                        //  //m_bricks[index].m_mesh_ptex_params.resize(quad_cnt); // 1 set of ptex params per quad
+                                        //  ptex_parameters_resource.resource->bind();
+                                        //  GLvoid* ptex_params = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, byte_size, GL_MAP_READ_BIT);
+                                        //  memcpy(m_bricks[index].m_mesh_ptex_params.data(), ptex_params, byte_size);
+                                        //  glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+                                    }
 
                                     {
                                         resources.per_model_resources[idx].bindless_texture_handles.resource->bind(0);
@@ -458,14 +486,12 @@ namespace EngineCore
                                         for (int i = 0; i < static_cast<int>(data.per_model_data[idx].update_bin_sizes.size()) - 1; ++i)
                                         {
                                             uint32_t bin_size = data.per_model_data[idx].update_bin_sizes[i];
-                                            if (bin_size == 0)
+                                            if (bin_size > 0)
                                             {
-                                                continue;
+                                                updatePtexTilesMipmaps_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
+
+                                                glDispatchCompute(tile_size_multiplier, tile_size_multiplier, bin_size);
                                             }
-                                    
-                                            updatePtexTilesMipmaps_prgm_resource.resource->setUniform("update_patch_offset", update_patch_offset);
-                                    
-                                            glDispatchCompute(tile_size_multiplier, tile_size_multiplier, bin_size);
                                     
                                             tile_size_multiplier /= 2;
                                             update_patch_offset += bin_size;

@@ -67,8 +67,8 @@ void main(void)
 
     patch_normal = normalize(cross(vec3(gl_in[1].gl_Position - gl_in[0].gl_Position),vec3(gl_in[3].gl_Position-gl_in[0].gl_Position)));
 
-    //    PtexParameters params = ptex_params[gl_PrimitiveID];
-//    
+    PtexParameters params = ptex_params[gl_PrimitiveID];
+
     //    //DEBUGGING
     //    //params.ngbr_ptex_param_indices[0] = -1;
     //    //params.ngbr_ptex_param_indices[1] = -1;
@@ -76,20 +76,20 @@ void main(void)
     //    //params.ngbr_ptex_param_indices[3] = -1;
     //    //params.texture_index = 0;
     //    //params.base_slice = 0;
-//    
-    //    // get values from neighbours
-    //    for(int i=0; i<4; ++i)
-    //    {
-    //      if( params.ngbr_ptex_param_indices[i] != -1)
-    //      {
-    //        // get neighbour params
-    //        PtexParameters neighbour_params = ptex_params[params.ngbr_ptex_param_indices[i]];
-//    
-    //        // for each neighbour get uv coordinates and texture indices and pass on to fragment shader
-    //        neighbour_uvs[i] = (uv_transform[neighbour_params.ngbr_uv_transform_cases[i]] * vec3(uv,1.0)).xy;
-    //        neighbour_indices[i] = ivec2(neighbour_params.texture_index,neighbour_params.base_slice);
-    //      }
-    //    }
+      
+    // get values from neighbours
+    for(int i=0; i<4; ++i)
+    {
+      if(params.ngbr_ptex_param_indices[i] != -1)
+      {
+        // get neighbour params
+        PtexParameters neighbour_params = ptex_params[params.ngbr_ptex_param_indices[i]];
+
+        // for each neighbour get uv coordinates and texture indices and pass on to fragment shader
+        neighbour_uvs[i] = (uv_transform[neighbour_params.ngbr_uv_transform_cases[i]] * vec3(uv,1.0)).xy;
+        neighbour_indices[i] = ivec2(neighbour_params.texture_index,neighbour_params.base_slice);
+      }
+    }
 
     position = model_view_matrix * position;
     gl_Position = projection_matrix * position;

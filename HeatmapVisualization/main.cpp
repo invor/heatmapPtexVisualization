@@ -54,7 +54,7 @@ void createDemoScene(EngineCore::WorldState& world_state, EngineCore::Graphics::
         ptexMesh_mngr,
         renderTask_mngr,
         transform_mngr,
-        "../bin/Keller.ply");
+        "../bin/Keller_low-poly.ply");
 
     // add system that compute patch distances once per simulation frame
     world_state.add([](EngineCore::WorldState& world_state, double dt, EngineCore::Utility::TaskScheduler& task_schedueler) {

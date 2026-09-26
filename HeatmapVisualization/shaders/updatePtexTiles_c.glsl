@@ -42,21 +42,63 @@ uniform int texture_slot_offset;
 uniform int gaze_data_column_cnt;
 uniform int gaze_data_row_cnt;
 
-// Returns the Viridis RGBA color for an input 't' clamped between 0.0 and 1.0
 vec3 viridis(float t) {
-  vec3 viridis_stops[5] = {
-    vec3( 68/255.f,   1/255.f,  84/255.f), // Dark Purple
-    vec3( 44/255.f, 114/255.f, 142/255.f), // Blue
-    vec3( 32/255.f, 144/255.f, 140/255.f), // Teal-Green
-    vec3( 94/255.f, 201/255.f,  97/255.f), // Bright Green
-    vec3(253/255.f, 231/255.f,  37/255.f)  // Yellow
+  vec3 viridis_lut[8] = {
+    vec3(0.2670039853213788,0.0048725657145795975,0.32941506855247793),
+    vec3(0.2747410319947279,0.19697326735916815,0.49725044340782604),
+    vec3(0.21267123715447978,0.3591013770537536,0.5516350468677014),
+    vec3(0.15295809873202398,0.4980514512730651,0.5576853269081522),
+    vec3(0.1220535918163036,0.6321055429812599,0.5308488657247317),
+    vec3(0.2900139372832507,0.7588451185052187,0.4278271609212135),
+    vec3(0.6221823410626537,0.8538142928663974,0.22624791114964743),
+    vec3(0.9932481489335602,0.9061547634208059,0.14393594366968385)
   };
 
-  float v = clamp(t, 0.0, 1.0) * 4.0;
+  float v = clamp(t, 0.0, 1.0) * 7.0;
   int i = int(floor(v));
   float lambda = v-i;
 
-  return viridis_stops[i] * (1.0-lambda) + viridis_stops[ min(i+1,4) ] * (lambda);
+  return viridis_lut[i] * (1.0-lambda) + viridis_lut[ min(i+1,7) ] * (lambda);
+}
+
+vec3 inferno(float t)
+{
+  vec3 inferno_lut[8] = {
+    vec3(0.0014619955811715805,0.0004659913919114934,0.013866005775115809),
+    vec3(0.15878054505364145,0.04414588479176828,0.32873705502988054),
+    vec3(0.396786518835543,0.08292103408227261,0.4331726873798219),
+    vec3(0.6234475076301247,0.16486328557646127,0.3880663468322876),
+    vec3(0.8308925639196657,0.28265548598550927,0.2586364361687295),
+    vec3(0.9615932007416385,0.4896799300459282,0.08356448400711391),
+    vec3(0.9816315597243276,0.7558372599499625,0.15291300331162103),
+    vec3(0.9883620799212208,0.9983616470620554,0.6449240982803861)
+  };
+
+  float v = clamp(t, 0.0, 1.0) * 7.0;
+  int i = int(floor(v));
+  float lambda = v-i;
+
+  return inferno_lut[i] * (1.0-lambda) + inferno_lut[ min(i+1,7) ] * (lambda);
+}
+
+vec3 blackBody(float t)
+{
+  vec3 black_body_lut[8] = {
+    vec3(0.0,0.0,0.0),
+    vec3(0.2567618382302789,0.08862237092250158,0.06900234709883349),
+    vec3(0.502299529628274,0.12275205976842546,0.10654041357261984),
+    vec3(0.7353154662963063,0.1982320329476474,0.12428036101896534),
+    vec3(0.8771435867383445,0.39490510462624345,0.03816328606394868),
+    vec3(0.911232394909533,0.631724377007152,0.10048201891972874),
+    vec3(0.9072006655243174,0.8550025783221541,0.18879408728283467),
+    vec3(1.0,1.0,1.0)
+  };
+
+  float v = clamp(t, 0.0, 1.0) * 7.0;
+  int i = int(floor(v));
+  float lambda = v-i;
+
+  return black_body_lut[i] * (1.0-lambda) + black_body_lut[ min(i+1,7) ] * (lambda);
 }
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
@@ -80,7 +122,7 @@ void main()
       quad_vertices[i].z = vertices[ quad_indices[i] * 3 + 2];
   }
   // compute texel position in world space from gID.xy and vertices
-  vec2 uv = vec2(gID.xy) / (tile_res - vec2(1.0)); 
+  vec2 uv = vec2(gID.xy) / (tile_res - vec2(1.0)) + (vec2(0.5)/tile_res); 
   vec3 p_0 = mix(quad_vertices[0],
                   quad_vertices[1],
                   uv.x);
@@ -101,23 +143,23 @@ void main()
   {
     //gaze_data[i*gaze_data_column_cnt + 0] // index
     float timestamp = gaze_data[i*gaze_data_column_cnt + 1]; // timestamp
-    float gp_x = -gaze_data[i*gaze_data_column_cnt + 2];
+    float gp_x = -gaze_data[i*gaze_data_column_cnt + 2] - 0.1;//manuel correction for mesh alignment
     float gp_y = gaze_data[i*gaze_data_column_cnt + 3];
     float gp_z = gaze_data[i*gaze_data_column_cnt + 4];
 
     float texel_to_gaze_point = distance(texel_position,vec3(gp_x,gp_y,gp_z));
 
-    intensity += smoothstep(0.25, 0.0, texel_to_gaze_point);
+    intensity += smoothstep(0.1, 0.0, texel_to_gaze_point);
   }
-  intensity /= 200;
+  intensity /= 25.0;
 
   // All texture (per tile) are kept within the same Texture2DArray
   //layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_images[ptex_index]); // NVIDIA
-  writeonly image2DArray ptex_image = writeonly image2DArray(ptex_images[ptex_index]); // AMD
+  image2DArray ptex_image = image2DArray(ptex_images[ptex_index]); // AMD
   //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(ptex_index)/20.0,float(ptex_slice)/2048.0,0.0,1.0));
   //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(texel_position,1.0));
   //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(gl_LocalInvocationID.x),0.0,0.0,1.0));
-  //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(ptex_index)/35.0,float(ptex_slice)/2048.0,0.0,1.0));
+  //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(ptex_index)/30.0,float(ptex_slice)/2048.0,0.0,1.0));
   imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),1.0));
   
   ptex_params[tgt_primtive_idx].texture_index = ptex_index;

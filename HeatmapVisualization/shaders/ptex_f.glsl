@@ -42,9 +42,10 @@ void main()
 {
   PtexParameters params = ptex_params[gl_PrimitiveID];
   
-  //vec4 colour = texelFetch(sampler2DArray(ptex_textures[params.texture_index]),ivec3(ivec2(uv),int(params.base_slice)),0);
-  vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(uv,float(params.base_slice)));
-  //vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(0.5,0.5,0.5));
+  ivec3 tex_size = textureSize(sampler2DArray(ptex_textures[params.texture_index]),0);
+
+  vec4 colour = texelFetch(sampler2DArray(ptex_textures[params.texture_index]),ivec3(ivec2(uv*tex_size.xy),int(params.base_slice)),0);
+  //vec4 colour = texture(sampler2DArray(ptex_textures[params.texture_index]),vec3(uv,float(params.base_slice))); 
 
   //vec4 colour = vec4(
   //  float(params.ngbr_ptex_param_indices[0])/384.0,
@@ -72,12 +73,15 @@ void main()
   //  colour = vec4(0.1,1.0,0.1,1.0);
   //}
 
-  float pseudo_lightning = clamp(dot(patch_normal,normalize(vec3(-1.0,1.0,-1.0))),0.0,1.0) * 0.5 + 0.5;
+  float pseudo_lightning = 
+    clamp(dot(patch_normal,normalize(vec3(-1.0,1.0,-1.0))),0.0,1.0) * 0.33 + //light source 1
+    clamp(dot(patch_normal,normalize(vec3(1.0,1.0,-1.0))),0.0,1.0) * 0.33 + //light source 2
+    0.33; // ambient
 
-  //out_colour = vec4(colour.rgb,1.0);
+  //colour.rgb = colour.a * colour.rgb + (1.0 - colour.a) * vec3(0.1);
   out_colour = vec4(colour.rgb * pseudo_lightning,1.0);
   return;
-  
+
   // get values from neighbours
   for(int i=0; i<4; ++i)
   {
@@ -95,5 +99,4 @@ void main()
   }
 
   out_colour = colour / colour.a;
-
 }
