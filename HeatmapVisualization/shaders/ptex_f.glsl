@@ -73,7 +73,9 @@ void main()
   //  1.0
   //  );
 
-  float border_sdf = sdBox(uv - vec2(0.5), vec2( 0.5 - 0.5*fwidth(uv) ));
+  float border_width = 1.25 * min(fwidthFine(uv).x,fwidthFine(uv).y);
+  //border_width = 0.05;
+  float border_sdf = sdBox(uv - vec2(0.5), vec2( 0.5 - border_width ));
   float axis_x_sdf = sdBox(uv - vec2(0.3,0.1), vec2(0.155,0.035));
   float axis_y_sdf = sdBox(uv - vec2(0.1,0.3), vec2(0.035,0.155));
 
@@ -81,7 +83,9 @@ void main()
   //if(border_sdf > 0.0 || axis_x_sdf < 0.0 || axis_y_sdf < 0.0)
   if(border_sdf > 0.0)
   {
-    base_colour = vec3(0.0);
+    base_colour = mix(base_colour.rgb, vec3(0.0), clamp(border_sdf/border_width, 0.0, 1.0));
+    //colour.rgb = mix(colour.rgb, vec3(0.0), clamp(border_sdf/border_width, 0.0, 1.0));
+    //colour.rgb = vec3(0.0);
   }
 
   //if(axis_x_sdf < -0.005)

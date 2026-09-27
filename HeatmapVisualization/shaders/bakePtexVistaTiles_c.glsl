@@ -105,8 +105,8 @@ void main()
     ptex_index += texture_base_idx;
 
     // All texture (per tile) are kept within the same Texture2DArray
-    //layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_images[ptex_index]); // NVIDIA
-    image2DArray ptex_image = image2DArray(ptex_images[ptex_index]); // AMD
+    layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_images[ptex_index]); // NVIDIA
+    //image2DArray ptex_image = image2DArray(ptex_images[ptex_index]); // AMD
 
     imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),intensity));
 }
