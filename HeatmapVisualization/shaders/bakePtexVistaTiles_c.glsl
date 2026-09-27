@@ -98,7 +98,7 @@ void main()
 
     intensity += smoothstep(0.1, 0.0, texel_to_gaze_point);
   }
-  intensity /= 25.0;
+  intensity /= 30.0;
   
     int ptex_index = (primtive_idx) / layers;
     int ptex_slice = (primtive_idx) - (ptex_index * layers);
@@ -108,5 +108,5 @@ void main()
     //layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_images[ptex_index]); // NVIDIA
     image2DArray ptex_image = image2DArray(ptex_images[ptex_index]); // AMD
 
-    imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),1.0));
+    imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),intensity));
 }

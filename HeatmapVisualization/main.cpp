@@ -38,7 +38,8 @@ void createDemoScene(EngineCore::WorldState& world_state, EngineCore::Graphics::
     auto& floatTable_mngr = world_state.get<EngineCore::Common::FloatTableComponentManager>();
 
     auto camera = entity_mngr.create();
-    transform_mngr.addComponent(camera, Vec3(0.0, 0.0, 0.0));
+    //transform_mngr.addComponent(camera, Vec3(0.0, 0.0, 0.0));
+    transform_mngr.addComponent(camera, Vec3(4.96187, 0.112066, -0.126714),Quat(0.550253, -0.0118322, 0.834721, 0.0179492));
     camera_mngr.addComponent(camera,0.01,1000.0,0.7);
     camera_mngr.setActiveCamera(camera);
 

@@ -151,7 +151,7 @@ void main()
 
     intensity += smoothstep(0.1, 0.0, texel_to_gaze_point);
   }
-  intensity /= 25.0;
+  intensity /= 30.0;
 
   // All texture (per tile) are kept within the same Texture2DArray
   //layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_images[ptex_index]); // NVIDIA
@@ -160,7 +160,8 @@ void main()
   //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(texel_position,1.0));
   //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(gl_LocalInvocationID.x),0.0,0.0,1.0));
   //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(float(ptex_index)/30.0,float(ptex_slice)/2048.0,0.0,1.0));
-  imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),1.0));
+  if(uv.y > 0.2)
+  imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),intensity));
   
   ptex_params[tgt_primtive_idx].texture_index = ptex_index;
   ptex_params[tgt_primtive_idx].base_slice = ptex_slice; 
