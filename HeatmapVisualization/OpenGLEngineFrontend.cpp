@@ -94,16 +94,16 @@
                 new_frame.m_aspect_ratio = camera_mngr.getAspectRatio(camera_idx);
                 new_frame.m_exposure = camera_mngr.getExposure(camera_idx);
 
-                std::cout << "Camera position: " 
-                    << transform_mngr.getWorldPosition(camera_transform_idx).x << ", "
-                    << transform_mngr.getWorldPosition(camera_transform_idx).y << ", "
-                    << transform_mngr.getWorldPosition(camera_transform_idx).z << std::endl;
-
-                std::cout << "Camera orientation: "
-                    << transform_mngr.getOrientation(camera_transform_idx).x << ", "
-                    << transform_mngr.getOrientation(camera_transform_idx).y << ", "
-                    << transform_mngr.getOrientation(camera_transform_idx).z << ", "
-                    << transform_mngr.getOrientation(camera_transform_idx).w << std::endl;
+                //  std::cout << "Camera position: " 
+                //      << transform_mngr.getWorldPosition(camera_transform_idx).x << ", "
+                //      << transform_mngr.getWorldPosition(camera_transform_idx).y << ", "
+                //      << transform_mngr.getWorldPosition(camera_transform_idx).z << std::endl;
+                //  
+                //  std::cout << "Camera orientation: "
+                //      << transform_mngr.getOrientation(camera_transform_idx).x << ", "
+                //      << transform_mngr.getOrientation(camera_transform_idx).y << ", "
+                //      << transform_mngr.getOrientation(camera_transform_idx).z << ", "
+                //      << transform_mngr.getOrientation(camera_transform_idx).w << std::endl;
 
                 EngineCore::Common::Frame& update_frame = m_frame_manager->setUpdateFrame(std::move(new_frame));
 
