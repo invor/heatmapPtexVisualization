@@ -46,7 +46,7 @@ void main()
     vec4 colour = texture(ptex_texture,vec3(uv,float(ptex_slice)));
 
     //write averaged values to mip level 1
-    layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_mipmap_images[ptex_index]); // NVIDIA
-    //image2DArray ptex_image = image2DArray(ptex_mipmap_images[ptex_index]); // AMD
+    //layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_mipmap_images[ptex_index]); // NVIDIA
+    image2DArray ptex_image = image2DArray(ptex_mipmap_images[ptex_index]); // AMD
     imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),colour);
 }

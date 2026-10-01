@@ -96,17 +96,17 @@ void main()
 
     float texel_to_gaze_point = distance(texel_position,vec3(gp_x,gp_y,gp_z));
 
-    intensity += smoothstep(0.1, 0.0, texel_to_gaze_point);
+    intensity += smoothstep(0.08, 0.0, texel_to_gaze_point);
   }
-  intensity /= 30.0;
+  intensity /= 50.0;
   
     int ptex_index = (primtive_idx) / layers;
     int ptex_slice = (primtive_idx) - (ptex_index * layers);
     ptex_index += texture_base_idx;
 
     // All texture (per tile) are kept within the same Texture2DArray
-    layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_images[ptex_index]); // NVIDIA
-    //image2DArray ptex_image = image2DArray(ptex_images[ptex_index]); // AMD
+    //layout(rgba8) writeonly image2DArray ptex_image = layout(rgba8) writeonly image2DArray(ptex_images[ptex_index]); // NVIDIA
+    image2DArray ptex_image = image2DArray(ptex_images[ptex_index]); // AMD
 
-    imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),intensity));
+    //imageStore(ptex_image,ivec3(gID.x,gID.y,ptex_slice),vec4(viridis(intensity),intensity));
 }

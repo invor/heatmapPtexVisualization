@@ -76,27 +76,27 @@ void main()
   float border_width = 1.25 * min(fwidthFine(uv).x,fwidthFine(uv).y);
   //border_width = 0.05;
   float border_sdf = sdBox(uv - vec2(0.5), vec2( 0.5 - border_width ));
-  float axis_x_sdf = sdBox(uv - vec2(0.3,0.1), vec2(0.155,0.035));
-  float axis_y_sdf = sdBox(uv - vec2(0.1,0.3), vec2(0.035,0.155));
+  float axis_x_sdf = sdBox(uv - vec2(0.3,0.1), vec2(0.155, 0.033));
+  float axis_y_sdf = sdBox(uv - vec2(0.1,0.3), vec2(0.033, 0.155));
 
-  vec3 base_colour = vec3(0.28);
+  vec3 base_colour = vec3(0.2);
   //if(border_sdf > 0.0 || axis_x_sdf < 0.0 || axis_y_sdf < 0.0)
   if(border_sdf > 0.0)
   {
-    base_colour = mix(base_colour.rgb, vec3(0.0), clamp(border_sdf/border_width, 0.0, 1.0));
-    //colour.rgb = mix(colour.rgb, vec3(0.0), clamp(border_sdf/border_width, 0.0, 1.0));
+    base_colour = mix(base_colour.rgb, vec3(0.1), clamp(border_sdf/border_width, 0.0, 1.0));
+    //colour.rgb = mix(colour.rgb, vec3(0.18), clamp(border_sdf/border_width, 0.0, 1.0));
     //colour.rgb = vec3(0.0);
   }
 
-  //if(axis_x_sdf < -0.005)
-  //{
-  //  colour = vec4(1.0,0.1,0.1,1.0);
-  //}
+  if(axis_x_sdf < 0.0)
+  {
+    //colour.rgb = mix(colour.rgb, vec3(1.0,0.0,0.0), clamp(-axis_x_sdf/0.01, 0.0, 1.0));
+  }
 
-  //if(axis_y_sdf < -0.005)
-  //{
-  //  colour = vec4(0.1,1.0,0.1,1.0);
-  //}
+  if(axis_y_sdf < 0.0)
+  {  
+    //colour.rgb = mix(colour.rgb, vec3(0.0,1.0,0.0), clamp(-axis_y_sdf/0.01, 0.0, 1.0));
+  }
 
   float pseudo_lightning = 
     clamp(dot(normalize(patch_normal),normalize(vec3(-1.0,1.0,-1.0))),0.0,1.0) * 0.3 + //light source 1
@@ -118,13 +118,18 @@ void main()
     {
       uint tex_idx = neighbour_indices[i].x;
       float base_slice = float(neighbour_indices[i].y);
-      vec2 uv = neighbour_uvs[i];
+      vec2 n_uv = neighbour_uvs[i];
       uvec2 tex_handle = ptex_textures[tex_idx];
 
-      vec4 neighbour_colour = texture(sampler2DArray(tex_handle),vec3(uv,base_slice));
+      vec4 neighbour_colour = texture(sampler2DArray(tex_handle),vec3(n_uv,base_slice));
       
       colour += neighbour_colour;
     }
+  }
+
+  if(uv.x < 0.75 && uv.x > 0.35 && uv.y < 0.75 && uv.y > 0.35)
+  {
+    colour = vec4( uv, 0.0, 1.0 );
   }
 
   out_colour = colour / colour.a;
