@@ -353,6 +353,9 @@ namespace EngineCore
                                     static int update_tiles_max = std::numeric_limits<int>::min();
                                     static double update_time_min = std::numeric_limits<double>::max();
                                     static double update_time_max = std::numeric_limits<double>::min();
+                                    static double update_time_sum = 0.0;
+                                    static size_t update_tiles_sum = 0;
+                                    static size_t update_cnt = 0;
 
                                     auto t_0 = std::chrono::steady_clock::now();
 
@@ -526,28 +529,27 @@ namespace EngineCore
 
                                     
                                     // wait until the results are available
-                                    //GLsync fence_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-                                    //GLenum retval = glClientWaitSync(fence_sync, GL_SYNC_FLUSH_COMMANDS_BIT, 10000000000);
-                                    //glDeleteSync(fence_sync);
+                                    GLsync fence_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+                                    GLenum retval = glClientWaitSync(fence_sync, GL_SYNC_FLUSH_COMMANDS_BIT, 100000000);
+                                    glDeleteSync(fence_sync);
 
                                     auto t_1 = std::chrono::steady_clock::now();
                                     std::chrono::duration<double, std::milli> time = (t_1 - t_0);
 
-                                    if (frame.m_render_frameID > 3000)
+                                    if (frame.m_render_frameID > 8000)
                                     {
                                         update_tiles_max = std::max(update_patch_offset, update_tiles_max);
                                         update_tiles_min = update_patch_offset > 0 ? std::min(update_patch_offset, update_tiles_min) : update_tiles_min;
                                         update_time_min = std::min(time.count(), update_time_min);
                                         update_time_max = std::max(time.count(), update_time_max);
-                                    }
-                                    else
-                                    {
-                                        std::cout << "Texture tile update - " << time.count() << "ms" << std::endl;
+                                        update_tiles_sum += update_patch_offset;
+                                        update_time_sum += time.count();
+                                        ++update_cnt;
                                     }
 
-                                    //std::cout << "Texture tile update - " << (t_1 - t_0) / 1000000.0 << "ms" << std::endl;
-                                    std::cout << "Texture tile update count min, max - " << update_tiles_min << ", " << update_tiles_max << std::endl;
-                                    std::cout << "Texture tile update time min, max - " << update_time_min << ", " << update_time_max << "ms" << std::endl;
+                                    std::cout << "Texture tile update - " << time.count() << "ms" << std::endl;
+                                    std::cout << "Texture tile update count min, max, avg - " << update_tiles_min << ", " << update_tiles_max << ", " << update_tiles_sum / static_cast<double>(update_cnt) << std::endl;
+                                    std::cout << "Texture tile update time min, max, avg - " << update_time_min << ", " << update_time_max << ", " << update_time_sum / static_cast<double>(update_cnt) << "ms" << std::endl;
                                 }
                             }
 
