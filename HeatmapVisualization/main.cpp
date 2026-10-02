@@ -251,14 +251,14 @@ struct App {
 
                 m_engine_frontend->render(render_frameID++, dt, width, height);
 
-                //ImGui::SetNextWindowPos(ImVec2(width - 375.0f, height - 100.0f));
-                //bool p_open = true;
-                //if (!ImGui::Begin("FPS", &p_open, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings))
-                //{
-                //    ImGui::End();
-                //    return;
-                //}
-                //ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+                ImGui::SetNextWindowPos(ImVec2(width - 375.0f, height - 100.0f));
+                bool p_open = true;
+                if (!ImGui::Begin("FPS", &p_open, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings))
+                {
+                    ImGui::End();
+                    return;
+                }
+                ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
                 ImGui::End();
                 ImGui::Render();
                 ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

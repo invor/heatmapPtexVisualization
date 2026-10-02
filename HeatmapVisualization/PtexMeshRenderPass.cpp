@@ -176,6 +176,12 @@ namespace EngineCore
                                             //TODO check if vista textures need to be baked
                                             //TODO temporarily combine with texture handle buffer init to onyl execute once
 
+                                            GLuint64 t_0, t_1;
+                                            unsigned int queryID[2];
+                                            // generate two queries
+                                            glGenQueries(2, queryID);
+                                            glQueryCounter(queryID[0], GL_TIMESTAMP);
+
                                             auto bakePtexVistaTiles_prgm_resource = resource_mngr.getShaderProgramResource("bakePtexVistaTiles_prgm");
 
                                             if (bakePtexVistaTiles_prgm_resource.state != READY)
@@ -255,6 +261,19 @@ namespace EngineCore
                                                 ptex_texture_resource.resource->bindTexture();
                                                 glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
                                             }
+
+                                            glQueryCounter(queryID[1], GL_TIMESTAMP);
+
+                                            // wait until the results are available
+                                            GLint stopTimerAvailable = 0;
+                                            while (!stopTimerAvailable)
+                                                glGetQueryObjectiv(queryID[1], GL_QUERY_RESULT_AVAILABLE, &stopTimerAvailable);
+
+                                            // get query results
+                                            glGetQueryObjectui64v(queryID[0], GL_QUERY_RESULT, &t_0);
+                                            glGetQueryObjectui64v(queryID[1], GL_QUERY_RESULT, &t_1);
+
+                                            std::cout << "Bake vista tiles - " << (t_1 - t_0) / 1000000.0 << "ms" << std::endl;
                                         }
                                     }
                                 }
@@ -330,6 +349,13 @@ namespace EngineCore
 
                                 if (ptex_update_ready && (update_patches > 0))
                                 {
+                                    static int update_tiles_min = std::numeric_limits<int>::max();
+                                    static int update_tiles_max = std::numeric_limits<int>::min();
+                                    static double update_time_min = std::numeric_limits<double>::max();
+                                    static double update_time_max = std::numeric_limits<double>::min();
+
+                                    auto t_0 = std::chrono::steady_clock::now();
+
                                     glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 
                                     // upload update information to GPU
@@ -362,7 +388,7 @@ namespace EngineCore
                                         availableTiles_buffer.resource->rebuffer(data.per_model_data[idx].availableTiles);
                                     }
 
-                                    glMemoryBarrier(GL_ALL_BARRIER_BITS);
+                                    //glMemoryBarrier(GL_ALL_BARRIER_BITS);
                                     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
                                     // TODO per LOD level dispatch computes
@@ -433,7 +459,7 @@ namespace EngineCore
                                         tile_size_multiplier /= 2;
                                     }
 
-                                    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+                                    //glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
                                     {
                                         // Assign vista tiles (no recomutation necessary)
@@ -498,6 +524,30 @@ namespace EngineCore
                                         }
                                     }
 
+                                    
+                                    // wait until the results are available
+                                    //GLsync fence_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+                                    //GLenum retval = glClientWaitSync(fence_sync, GL_SYNC_FLUSH_COMMANDS_BIT, 10000000000);
+                                    //glDeleteSync(fence_sync);
+
+                                    auto t_1 = std::chrono::steady_clock::now();
+                                    std::chrono::duration<double, std::milli> time = (t_1 - t_0);
+
+                                    if (frame.m_render_frameID > 3000)
+                                    {
+                                        update_tiles_max = std::max(update_patch_offset, update_tiles_max);
+                                        update_tiles_min = update_patch_offset > 0 ? std::min(update_patch_offset, update_tiles_min) : update_tiles_min;
+                                        update_time_min = std::min(time.count(), update_time_min);
+                                        update_time_max = std::max(time.count(), update_time_max);
+                                    }
+                                    else
+                                    {
+                                        std::cout << "Texture tile update - " << time.count() << "ms" << std::endl;
+                                    }
+
+                                    //std::cout << "Texture tile update - " << (t_1 - t_0) / 1000000.0 << "ms" << std::endl;
+                                    std::cout << "Texture tile update count min, max - " << update_tiles_min << ", " << update_tiles_max << std::endl;
+                                    std::cout << "Texture tile update time min, max - " << update_time_min << ", " << update_time_max << "ms" << std::endl;
                                 }
                             }
 
